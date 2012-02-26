@@ -1,0 +1,88 @@
+#!/bin/bash
+# vim: set ft=sh :
+fifo=/tmp/dnm-fifo
+trap 'kill 0' TERM EXIT 
+touch $fifo
+
+ICONDIR=images
+
+# set dzen2 arguments
+fn="-*-terminus  ttf -*-*-*-*-12-*-*-*-*-*-*-*"
+w=200
+h=15
+fg="#FFFFFF"
+bg="#000000"
+ta=c
+x=0
+y=`expr 768 - $h`
+
+actions="entertitle=uncollapse,exec:$0 --slave"
+actions="$actions;enterslave=grabkeys"
+actions="$actions;leaveslave=collapse,ungrabkeys"
+actions="$actions;button1=menuexec"
+actions="$actions;button2=togglestick"
+actions="$actions;button3=exit:13"
+actions="$actions;button4=scrollup"
+actions="$actions;button5=scrolldown"
+actions="$actions;key_Escape=ungrabkeys,exit"
+
+# start dzen
+(tail -f $fifo | dzen2 -p -l 2 -m -w $w -h $h -x $x -y $y -ta $ta -e '$actions') &
+
+function muted {
+	vol_mode=`amixer|head -n6|tail -n1|awk '{print $6}' | tr -d '[]'`
+    if [ $vol_mode == "off" ]; then
+        echo -n 1
+    else
+        echo -n 0
+    fi
+}    
+function volume {
+    echo -n `amixer|head -n6|tail -n1|awk '{print $5}' | tr -d '[]'`
+}
+
+function drawtitle {
+    while true; do
+        echo -n '^tw()' >> $fifo # draw the title
+        if [ $(muted) -eq 1 ]; then
+            echo "^fg(grey30)^i($ICONDIR/spkr_02.xbm)^fg()" >> $fifo
+        else
+            echo "^i($ICONDIR/spkr_01.xbm) $(volume)" >> $fifo
+        fi
+        sleep 0.5s
+    done
+}
+
+function drawslave {
+    # draw line 1 (muting)
+    if [ $(muted) -eq 1 ]; then
+        echo "^fg(red)^i($ICONDIR/full.xbm) Muted^fg()" >> $fifo
+    else
+        echo "^fg(green)^i($ICONDIR/empty.xbm) Mute^fg()" >> $fifo
+    fi
+
+    #draw line 2 (volume bar)
+    echo filler >> $fifo
+}
+
+usage="$0: --help"
+
+if [ $# -eq 0 ]; then
+    drawtitle
+else
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --slave)
+                drawslave
+                ;;
+            --help)
+                echo "$usage"
+                exit
+                ;;
+            *)
+                echo "$usage"
+                exit 1
+                ;;
+        esac
+    done
+fi
